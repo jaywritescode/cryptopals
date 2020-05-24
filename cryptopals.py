@@ -144,7 +144,7 @@ def decrypt_single_byte_xor(encrypted):
     if not decryptions:
         return nil_score
 
-    return min(map(lambda p: Score(score(p), p.get_plaintext()), decryptions))
+    return min(map(lambda p: Score(score(p), p), decryptions))
 
 
 def score(text):
@@ -228,20 +228,29 @@ KeySize = namedtuple('KeySize', ['normalized_hamming_distance', 'key_size'])
 
 
 def break_repeating_key_xor(encrypted):
+    print("attempting break repeating key xor")
+
     def guess_keysize(keysize):
         return bitwise_hamming_distance(encrypted[:keysize], encrypted[keysize:2 * keysize])
 
     heap = [KeySize(guess_keysize(n) / n, n) for n in range(2, 40)]
     heapq.heapify(heap)
 
-    keysize_guess = heap[0].key_size
+    while True:
+        if not heap:
+            raise ValueError("No key length worked!")
 
-    chunks = list(grouper(encrypted, keysize_guess, fillvalue=0))
-    cols = list(itertools.zip_longest(*chunks))
+        keysize_guess = heapq.heappop(heap).key_size
 
-    colkeys = [decrypt_single_byte_xor(col) for col in cols]
+        chunks = list(grouper(encrypted, keysize_guess, fillvalue=0))
+        cols = list(itertools.zip_longest(*chunks))
 
-    print(colkeys)
+        colkeys = [decrypt_single_byte_xor(col) for col in cols]
+
+        print(colkeys)
+
+        if not any(x is nil_score for x in colkeys):
+            return ''.join([chr(score.decryption.key) for score in colkeys])
 
 
 
@@ -276,7 +285,7 @@ def break_repeating_key_xor(encrypted):
 if __name__ == '__main__':
     # tests for parts 1, 2, 5 and part of 6
     import doctest
-    doctest.testmod(verbose=True)
+    doctest.testmod()
 
     # test for part 3 (which is potentially flaky
     x = '1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736'
@@ -292,7 +301,7 @@ if __name__ == '__main__':
         m = min((decrypt_single_byte_xor(line.strip()), idx) for idx, line in enumerate(request.text.splitlines()))
         print(tuple((m[0].decryption, m[1])))
 
-    # with requests.get(make_url('6')) as request:
-    #     unencoded = base64.b64decode(request.content)
-    #     break_repeating_key_xor(unencoded)
-    #     print("done")
+    with requests.get(make_url('6')) as request:
+        unencoded = base64.b64decode(request.content)
+        print(break_repeating_key_xor(unencoded))
+        print("done")
