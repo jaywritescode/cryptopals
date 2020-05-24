@@ -168,8 +168,8 @@ def score(text):
 
     return total_variance
 
-
-def repeating_key_xor(plaintext, key):
+@singledispatch
+def repeating_key_xor(text, key):
     """
     Set 1, challenge 5.
 
@@ -181,11 +181,32 @@ def repeating_key_xor(plaintext, key):
     >>> repeating_key_xor("Burning 'em, if you ain't quick and nimble\\nI go crazy when I hear a cymbal", "ICE")
     '0b3637272a2b2e63622c2e69692a23693a2a3c6324202d623d63343c2a26226324272765272a282b2f20430a652e2c652a3124333a653e2b2027630c692b20283165286326302e27282f'
 
-    :param plaintext: the plaintext, as a str
+    :param text: the text, either plaintext or ciphertext, as bytes
     :param key: the key, as a str
     :return: a hex-encoded string
     """
-    encrypted = [p ^ k for p, k in zip((ord(c) for c in plaintext), itertools.cycle([ord(c) for c in key]))]
+    encrypted = [p ^ k for p, k in zip(text, itertools.cycle([ord(c) for c in key]))]
+    return bytes(encrypted).hex()
+
+
+@repeating_key_xor.register(str)
+def _(text, key):
+    """
+    Set 1, challenge 5.
+
+    Encrypt plaintext with a repeating, multi-byte key.
+
+    For every byte in the plaintext, byte i is xor'd with key[i % len(key)] and each result is converted to a
+    two-character hexadecimal number possibly including a leading zero. We return the concatenation of those results.
+
+    >>> repeating_key_xor(b"Burning 'em, if you ain't quick and nimble\\nI go crazy when I hear a cymbal", "ICE")
+    '0b3637272a2b2e63622c2e69692a23693a2a3c6324202d623d63343c2a26226324272765272a282b2f20430a652e2c652a3124333a653e2b2027630c692b20283165286326302e27282f'
+
+    :param text: the text, either plaintext or ciphertext, as a str
+    :param key: the key, as a str
+    :return: a hex-encoded string
+    """
+    encrypted = [p ^ k for p, k in zip((ord(c) for c in text), itertools.cycle([ord(c) for c in key]))]
     return bytes(encrypted).hex()
 
 
@@ -226,33 +247,38 @@ def grouper(iterable, n, fillvalue=None):
 
 KeySize = namedtuple('KeySize', ['normalized_hamming_distance', 'key_size'])
 
-
 def break_repeating_key_xor(encrypted):
-    print("attempting break repeating key xor")
-
-    def guess_keysize(keysize):
+    def hamming_distance(keysize):
         return bitwise_hamming_distance(encrypted[:keysize], encrypted[keysize:2 * keysize])
 
-    heap = [KeySize(guess_keysize(n) / n, n) for n in range(2, 40)]
+    heap = [KeySize(hamming_distance(n) / n, n) for n in range(2, 40)]
     heapq.heapify(heap)
+
+    def fail_fast_decrypt(columns):
+        res = []
+        for column in columns:
+            dec = decrypt_single_byte_xor(column)
+            if dec is nil_score:
+                return None
+            res.append(dec)
+        return res
 
     while True:
         if not heap:
             raise ValueError("No key length worked!")
 
-        keysize_guess = heapq.heappop(heap).key_size
+        chunks = list(grouper(encrypted, heapq.heappop(heap).key_size, fillvalue=0))
+        columns = list(itertools.zip_longest(*chunks))
 
-        chunks = list(grouper(encrypted, keysize_guess, fillvalue=0))
-        cols = list(itertools.zip_longest(*chunks))
-
-        colkeys = [decrypt_single_byte_xor(col) for col in cols]
-
-        print(colkeys)
-
-        if not any(x is nil_score for x in colkeys):
-            return ''.join([chr(score.decryption.key) for score in colkeys])
+        individual_keys = fail_fast_decrypt(columns)
+        if individual_keys:
+            yield ''.join([chr(score.decryption.key) for score in individual_keys])
 
 
+def decrypt_repeating_key_xor(encrypted):
+    while True:
+        keys = break_repeating_key_xor(encrypted)
+        return bytes.fromhex(repeating_key_xor(encrypted, next(keys)))
 
 
 
@@ -301,7 +327,7 @@ if __name__ == '__main__':
         m = min((decrypt_single_byte_xor(line.strip()), idx) for idx, line in enumerate(request.text.splitlines()))
         print(tuple((m[0].decryption, m[1])))
 
+    # test for part 6
     with requests.get(make_url('6')) as request:
         unencoded = base64.b64decode(request.content)
-        print(break_repeating_key_xor(unencoded))
-        print("done")
+        print(decrypt_repeating_key_xor(unencoded))
