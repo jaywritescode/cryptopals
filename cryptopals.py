@@ -1,5 +1,7 @@
 import base64
 from collections import Counter, namedtuple
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
 import heapq
 from functools import singledispatch
 import itertools
@@ -114,6 +116,9 @@ class Decryption:
 
     def __iter__(self):
         return iter(self.plaintext)
+
+    def __repr__(self):
+        return "Decryption(plaintext={!r}, key={})".format(''.join(self.plaintext), self.key)
 
     @staticmethod
     def create(ciphertext, key):
@@ -276,10 +281,27 @@ def break_repeating_key_xor(encrypted):
 
 
 def decrypt_repeating_key_xor(encrypted):
+    """
+    Set 1, challenge 6.
+
+    :param encrypted:
+    :return:
+    """
     while True:
         keys = break_repeating_key_xor(encrypted)
         return bytes.fromhex(repeating_key_xor(encrypted, next(keys)))
 
+
+def attack_ecb_in_aes(encrypted, key):
+    """
+    Set 1, challenge 7
+
+    :param encrypted:
+    :return:
+    """
+    cipher = Cipher(algorithms.AES(key), modes.ECB(), default_backend())
+    decryptor = cipher.decryptor()
+    return decryptor.update(encrypted) + decryptor.finalize()
 
 
 
@@ -331,3 +353,8 @@ if __name__ == '__main__':
     with requests.get(make_url('6')) as request:
         unencoded = base64.b64decode(request.content)
         print(decrypt_repeating_key_xor(unencoded))
+
+    # test for part 7
+    with requests.get(make_url('7')) as request:
+        unencoded = base64.b64decode(request.content)
+        print(attack_ecb_in_aes(unencoded, b'YELLOW SUBMARINE'))
