@@ -358,3 +358,17 @@ if __name__ == '__main__':
     with requests.get(make_url('7')) as request:
         unencoded = base64.b64decode(request.content)
         print(attack_ecb_in_aes(unencoded, b'YELLOW SUBMARINE'))
+
+    # test for part 8
+    with requests.get(make_url('8')) as request:
+        answer = None
+        for idx, line in enumerate(request.content.splitlines()):
+            chunks = grouper(line, 16)
+
+            seen = set()
+            for chunk in chunks:
+                if chunk in seen:
+                    print(idx, line)
+                    break
+                else:
+                    seen.add(chunk)
