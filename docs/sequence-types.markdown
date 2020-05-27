@@ -41,18 +41,6 @@ base64.b64encode(i)
 
 I guess fair enough. A _string_ isn't a thing in super-duper-literal Python: the data type is `str` and it doesn't implement the [buffer protocol](https://docs.python.org/3/c-api/buffer.html#bufferobjects), whatever that is. I can prepend a `b` to that string above and try encoding again.
 
----
-
-<details>
-    <summary>Some side info about synonyms:</summary>
-    <p>
-The following are both equivalent to `b"49276d206b69"`.
-
-    "49276d206b69".encode('ascii')
-    bytes("49276d206b69", 'ascii')
-    </p>
-</details>
-
 
 ```python
 i = (b"49276d206b696c6c696e6720796f757220627261696e206c"
