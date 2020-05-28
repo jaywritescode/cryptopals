@@ -252,6 +252,7 @@ def grouper(iterable, n, fillvalue=None):
 
 KeySize = namedtuple('KeySize', ['normalized_hamming_distance', 'key_size'])
 
+
 def break_repeating_key_xor(encrypted):
     def hamming_distance(keysize):
         return bitwise_hamming_distance(encrypted[:keysize], encrypted[keysize:2 * keysize])
@@ -303,6 +304,24 @@ def attack_ecb_in_aes(encrypted, key):
     decryptor = cipher.decryptor()
     return decryptor.update(encrypted) + decryptor.finalize()
 
+
+def pad_to_length(block, length):
+    """
+    Set 2, challenge 9
+
+    Pad a block of text to the given length for PKCS#7.
+
+    >>> pad_to_length(b"YELLOW SUBMARINE", 20)
+    b"YELLOW SUBMARINE\x04\x04\x04\x04"
+
+    :param block: the block to pad, as a bytes
+    :param length: the total length of the padded block
+    :return: the padded block, as a bytes
+    """
+    block_len = len(block)
+    padding_amt = length - block_len
+
+    return block + bytes([padding_amt] * padding_amt)
 
 
 
