@@ -130,6 +130,22 @@ Score = namedtuple('Score', ['score', 'decryption'])
 nil_score = Score(float('inf'), decryption=None)
 
 
+def decrypt_single_byte_xor_in_range(encrypted, keys):
+    """
+    Apply single-byte XOR decryption to `encrypted` for each of the given keys. Return only the printable Decryptions.
+
+    :param encrypted: the message, a hex-encoded string
+    :param keys: an iterable of keys to try
+    :return: an iterable of printable Decryptions
+    """
+    decryptions = [Decryption.create(encrypted, key) for key in keys]
+
+    # filter out plaintexts with non-printable characters
+    decryptions = list(filter(lambda d: d.is_printable(), decryptions))
+
+    return decryptions
+
+
 def decrypt_single_byte_xor(encrypted):
     """
     Set 1, challenge 3.
@@ -141,11 +157,7 @@ def decrypt_single_byte_xor(encrypted):
     :param encrypted: the message, a hex-encoded string
     :return: the best Score when the string is decrypted against every ASCII character.
     """
-    decryptions = [Decryption.create(encrypted, key) for key in range(1, 2 ** 8)]
-
-    # filter out plaintexts with non-printable characters
-    decryptions = list(filter(lambda d: d.is_printable(), decryptions))
-
+    decryptions = decrypt_single_byte_xor_in_range(encrypted, range(1, 2 ** 8))
     if not decryptions:
         return nil_score
 
@@ -350,44 +362,180 @@ def pad_to_length(block, length):
 
 
 if __name__ == '__main__':
-    # tests for parts 1, 2, 5 and part of 6
-    import doctest
-    doctest.testmod()
+    import unittest
 
-    # test for part 3 (which is potentially flaky
-    x = '1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736'
-    print(decrypt_single_byte_xor(x))
+    class TestChallenge1(unittest.TestCase):
+        def test_to_base(self):
+            expected = b'SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t'
+            actual = to_base64('49276d206b696c6c696e6720796f757220627261696e206c'
+                         '696b65206120706f69736f6e6f7573206d757368726f6f6d')
+
+            self.assertEqual(expected, actual)
+
+    class TestChallenge2(unittest.TestCase):
+        def test_fixed_xor(self):
+            expected = '746865206b696420646f6e277420706c6179'
+            actual = fixed_xor('1c0111001f010100061a024b53535009181c', '686974207468652062756c6c277320657965')
+
+            self.assertEqual(expected, actual)
+
+    class TestChallenge3(unittest.TestCase):
+        def test_decrypt_single_byte_xor(self):
+            arg = '1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736'
+            res = decrypt_single_byte_xor(arg)
+
+            # In this case, the `score` function assigns the correct plaintext the smallest value, as expected,
+            # but it's not at all clear it will do so in every case.
+            self.assertEqual("Cooking MC's like a pound of bacon", res.decryption.get_plaintext())
 
     import requests
 
     def make_url(id):
         return 'https://cryptopals.com/static/challenge-data/{}.txt'.format(id)
 
-    # test for part 4
-    with requests.get(make_url('4')) as request:
-        m = min((decrypt_single_byte_xor(line.strip()), idx) for idx, line in enumerate(request.text.splitlines()))
-        print(tuple((m[0].decryption, m[1])))
+    class TestChallenge4(unittest.TestCase):
+        def test_find_encrypted_with_single_byte_xor(self):
+            expected = 170
 
-    # test for part 6
-    with requests.get(make_url('6')) as request:
-        unencoded = base64.b64decode(request.content)
-        print(decrypt_repeating_key_xor(unencoded))
+            with requests.get(make_url('4')) as request:
+                res = min((decrypt_single_byte_xor(line.strip()), idx)
+                          for idx, line in enumerate(request.text.splitlines()))
+                self.assertEqual(expected, res[1])
 
-    # test for part 7
-    with requests.get(make_url('7')) as request:
-        unencoded = base64.b64decode(request.content)
-        print(attack_ecb_in_aes(unencoded, b'YELLOW SUBMARINE'))
+    class TestChallenge5(unittest.TestCase):
+        def test_repeating_key_xor(self):
+            expected = ('0b3637272a2b2e63622c2e69692a23693a2a3c6324202d623d63343c2a2622632427276527'
+                        '2a282b2f20430a652e2c652a3124333a653e2b2027630c692b20283165286326302e27282f')
+            actual = repeating_key_xor("Burning 'em, if you ain't quick and nimble\nI go crazy when I hear a cymbal", "ICE")
 
-    # test for part 8
-    with requests.get(make_url('8')) as request:
-        answer = None
-        for idx, line in enumerate(request.content.splitlines()):
-            chunks = grouper(line, 16)
+            self.assertEqual(expected, actual)
 
-            seen = set()
-            for chunk in chunks:
-                if chunk in seen:
-                    print(idx, line)
-                    break
-                else:
-                    seen.add(chunk)
+    lyrics = (b"I'm back and I'm ringin' the bell \n"
+                            b"A rockin' on the mike while the fly girls yell \n"
+                            b"In ecstasy in the back of me \n"
+                            b"Well that's my DJ Deshay cuttin' all them Z's \n"
+                            b"Hittin' hard and the girlies goin' crazy \n"
+                            b"Vanilla's on the mike, man I'm not lazy. \n\n"
+                            b"I'm lettin' my drug kick in \n"
+                            b"It controls my mouth and I begin \n"
+                            b"To just let it flow, let my concepts go \n"
+                            b"My posse's to the side yellin', Go Vanilla Go! \n\n"
+                            b"Smooth 'cause that's the way I will be \n"
+                            b"And if you don't give a damn, then \n"
+                            b"Why you starin' at me \n"
+                            b"So get off 'cause I control the stage \n"
+                            b"There's no dissin' allowed \n"
+                            b"I'm in my own phase \n"
+                            b"The girlies sa y they love me and that is ok \n"
+                            b"And I can dance better than any kid n' play \n\n"
+                            b"Stage 2 -- Yea the one ya' wanna listen to \n"
+                            b"It's off my head so let the beat play through \n"
+                            b"So I can funk it up and make it sound good \n"
+                            b"1-2-3 Yo -- Knock on some wood \n"
+                            b"For good luck, I like my rhymes atrocious \n"
+                            b"Supercalafragilisticexpialidocious \n"
+                            b"I'm an effect and that you can bet \n"
+                            b"I can take a fly girl and make her wet. \n\n"
+                            b"I'm like Samson -- Samson to Delilah \n"
+                            b"There's no denyin', You can try to hang \n"
+                            b"But you'll keep tryin' to get my style \n"
+                            b"Over and over, practice makes perfect \n"
+                            b"But not if you're a loafer. \n\n"
+                            b"You'll get nowhere, no place, no time, no girls \n"
+                            b"Soon -- Oh my God, homebody, you probably eat \n"
+                            b"Spaghetti with a spoon! Come on and say it! \n\n"
+                            b"VIP. Vanilla Ice yep, yep, I'm comin' hard like a rhino \n"
+                            b"Intoxicating so you stagger like a wino \n"
+                            b"So punks stop trying and girl stop cryin' \n"
+                            b"Vanilla Ice is sellin' and you people are buyin' \n"
+                            b"'Cause why the freaks are jockin' like Crazy Glue \n"
+                            b"Movin' and groovin' trying to sing along \n"
+                            b"All through the ghetto groovin' this here song \n"
+                            b"Now you're amazed by the VIP posse. \n\n"
+                            b"Steppin' so hard like a German Nazi \n"
+                            b"Startled by the bases hittin' ground \n"
+                            b"There's no trippin' on mine, I'm just gettin' down \n"
+                            b"Sparkamatic, I'm hangin' tight like a fanatic \n"
+                            b"You trapped me once and I thought that \n"
+                            b"You might have it \n"
+                            b"So step down and lend me your ear \n"
+                            b"'89 in my time! You, '90 is my year. \n\n"
+                            b"You're weakenin' fast, YO! and I can tell it \n"
+                            b"Your body's gettin' hot, so, so I can smell it \n"
+                            b"So don't be mad and don't be sad \n"
+                            b"'Cause the lyrics belong to ICE, You can call me Dad \n"
+                            b"You're pitchin' a fit, so step back and endure \n"
+                            b"Let the witch doctor, Ice, do the dance to cure \n"
+                            b"So come up close and don't be square \n"
+                            b"You wanna battle me -- Anytime, anywhere \n\n"
+                            b"You thought that I was weak, Boy, you're dead wrong \n"
+                            b"So come on, everybody and sing this song \n\n"
+                            b"Say -- Play that funky music Say, go white boy, go white boy go \n"
+                            b"play that funky music Go white boy, go white boy, go \n"
+                            b"Lay down and boogie and play that funky music till you die. \n\n"
+                            b"Play that funky music Come on, Come on, let me hear \n"
+                            b"Play that funky music white boy you say it, say it \n"
+                            b"Play that funky music A little louder now \n"
+                            b"Play that funky music, white boy Come on, Come on, Come on \n"
+                            b"Play that funky music \n")
+
+    class TestChallenge6(unittest.TestCase):
+        def test_bitwise_hamming_distance(self):
+            expected = 37
+            actual = bitwise_hamming_distance(b"this is a test", b"wokka wokka!!!")
+
+            self.assertEqual(expected, actual)
+
+        def test_break_repeating_key(self):
+            with requests.get(make_url('6')) as request:
+                expected = lyrics
+                actual = decrypt_repeating_key_xor(base64.b64decode(request.content))
+
+                self.assertEqual(expected, actual)
+
+    class TestChallenge7(unittest.TestCase):
+        def test_attack_ecb_in_aes(self):
+            with requests.get(make_url('7')) as request:
+                expected = lyrics
+                actual = attack_ecb_in_aes(base64.b64decode(request.content), b'YELLOW SUBMARINE')
+
+                # The decryption process adds padding to the ciphertext so that the ciphertext length is a multiple
+                # of the key length. See challenge #9.
+                self.assertTrue(actual.startswith(expected))
+
+    class TestChallenge8(unittest.TestCase):
+        """
+        This challenge just uses existing code from the previous challenges.
+        """
+        def solve(self):
+            """
+            For each line, we look for a substring that appears more than once. This shouldn't happen in strong encryption,
+            but it can happen with ECB-style encryption ("electronic code book").
+
+            :return: the line number in the request that's encrypted with ECB
+            """
+            with requests.get(make_url('8')) as request:
+                for idx, line in enumerate(request.content.splitlines()):
+                    chunks = grouper(line, 16)
+
+                    seen = set()
+                    for chunk in chunks:
+                        if chunk in seen:
+                            return idx
+
+                        seen.add(chunk)
+
+        def test_find_aes_in_ecb_mode(self):
+            expected = 132
+            actual = self.solve()
+
+            self.assertEqual(expected, actual)
+
+    class TestChallenge9(unittest.TestCase):
+        def test_pad_to_length(self):
+            expected = b"YELLOW SUBMARINE\x04\x04\x04\x04"
+            actual = pad_to_length(b"YELLOW SUBMARINE", 20)
+
+            self.assertEqual(expected, actual)
+
+    unittest.main()
