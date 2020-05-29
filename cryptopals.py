@@ -58,22 +58,18 @@ def fixed_xor(m, n):
     """
     Set 1, challenge 2.
 
-    Given numbers `m` and `n` as hex-encoded strings, calculate the bitwise exclusive-or of `m` and `n`.
+    Given numbers `m` and `n` as bytes, calculate the bitwise exclusive-or of `m` and `n`.
 
-    >>> fixed_xor('1c0111001f010100061a024b53535009181c', '686974207468652062756c6c277320657965')
-    '746865206b696420646f6e277420706c6179'
-
-    :param m: a hex-encoded string
-    :param n: a hex-encoded string
-    :return: a hex-encoded string
+    :param m: a bytes
+    :param n: another bytes
+    :return: a bytes
     """
     if len(m) != len(n):
         raise ValueError("Expecting both arguments to have the same length.")
 
-    return bytes(x ^ y for x, y in zip(bytes.fromhex(m), bytes.fromhex(n))).hex()
+    return bytes(x ^ y for x, y in zip(m, n))
 
 
-@singledispatch
 def single_byte_xor(encrypted, key):
     """
     Decrypt a message encoded with a single-byte key.
@@ -86,21 +82,6 @@ def single_byte_xor(encrypted, key):
     :return: the plaintext bytes
     """
     return bytes(c ^ key for c in encrypted)
-
-
-@single_byte_xor.register(str)
-def _(encrypted, key):
-    """
-    Decrypt a message encoded with a single-byte key.
-
-    >>> single_byte_xor('1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736', ord('X'))
-    b"Cooking MC's like a pound of bacon"
-
-    :param encrypted: the message, a hex-encoded string
-    :param key: the key, 0 <= key < 2 ** 8
-    :return: the plaintext bytes
-    """
-    return bytes(c ^ key for c in bytes.fromhex(encrypted))
 
 
 class Decryption:
@@ -125,12 +106,7 @@ class Decryption:
         return Decryption(single_byte_xor(ciphertext, key), key)
 
 
-Score = namedtuple('Score', ['score', 'decryption'])
-
-nil_score = Score(float('inf'), decryption=None)
-
-
-def decrypt_single_byte_xor_in_range(encrypted, keys):
+def try_decrypt_single_byte_xor(encrypted, keys):
     """
     Apply single-byte XOR decryption to `encrypted` for each of the given keys. Return only the printable Decryptions.
 
@@ -141,9 +117,7 @@ def decrypt_single_byte_xor_in_range(encrypted, keys):
     decryptions = [Decryption.create(encrypted, key) for key in keys]
 
     # filter out plaintexts with non-printable characters
-    decryptions = list(filter(lambda d: d.is_printable(), decryptions))
-
-    return decryptions
+    return list(filter(lambda d: d.is_printable(), decryptions))
 
 
 def decrypt_single_byte_xor(encrypted):
@@ -154,14 +128,19 @@ def decrypt_single_byte_xor(encrypted):
 
     Assume that all characters in the string are in string.printable.
 
-    :param encrypted: the message, a hex-encoded string
+    :param encrypted: the message, as bytes
     :return: the best Score when the string is decrypted against every ASCII character.
     """
-    decryptions = decrypt_single_byte_xor_in_range(encrypted, range(1, 2 ** 8))
+    decryptions = try_decrypt_single_byte_xor(encrypted, range(1, 2 ** 8))
     if not decryptions:
         return nil_score
 
     return min(map(lambda p: Score(score(p), p), decryptions))
+
+
+Score = namedtuple('Score', ['score', 'decryption'])
+
+nil_score = Score(float('inf'), decryption=None)
 
 
 def score(text):
@@ -184,6 +163,7 @@ def score(text):
         total_variance += abs(counter[letter] / letter_count - frequency)
 
     return total_variance
+
 
 @singledispatch
 def repeating_key_xor(text, key):
@@ -374,15 +354,16 @@ if __name__ == '__main__':
 
     class TestChallenge2(unittest.TestCase):
         def test_fixed_xor(self):
-            expected = '746865206b696420646f6e277420706c6179'
-            actual = fixed_xor('1c0111001f010100061a024b53535009181c', '686974207468652062756c6c277320657965')
+            expected = bytes.fromhex('746865206b696420646f6e277420706c6179')
+            actual = fixed_xor(bytes.fromhex('1c0111001f010100061a024b53535009181c'),
+                               bytes.fromhex('686974207468652062756c6c277320657965'))
 
             self.assertEqual(expected, actual)
 
     class TestChallenge3(unittest.TestCase):
         def test_decrypt_single_byte_xor(self):
             arg = '1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736'
-            res = decrypt_single_byte_xor(arg)
+            res = decrypt_single_byte_xor(bytes.fromhex(arg))
 
             # In this case, the `score` function assigns the correct plaintext the smallest value, as expected,
             # but it's not at all clear it will do so in every case.
@@ -398,7 +379,7 @@ if __name__ == '__main__':
             expected = 170
 
             with requests.get(make_url('4')) as request:
-                res = min((decrypt_single_byte_xor(line.strip()), idx)
+                res = min((decrypt_single_byte_xor(bytes.fromhex(line.strip())), idx)
                           for idx, line in enumerate(request.text.splitlines()))
                 self.assertEqual(expected, res[1])
 
